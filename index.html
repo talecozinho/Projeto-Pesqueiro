@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pesqueiro Manager Pro</title>
+    <style>
+        :root { --primary: #007bff; --success: #28a745; --dark: #343a40; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--bg); margin: 0; padding: 20px; }
+        
+        header { background: var(--dark); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        h1, h2 { margin: 0; }
+        
+        .container { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+        @media(max-width: 768px) { .container { grid-template-columns: 1fr; } }
+
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        
+        button { width: 100%; padding: 12px; background-color: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.success { background-color: var(--success); }
+
+        .painel-comanda { background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 4px; text-align: center; display: none; }
+        .valor-gigante { font-size: 3em; font-weight: bold; color: var(--dark); display: block; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🎣 Pesqueiro Manager</h1>
+        <span>Sistema v1.0</span>
+    </header>
+
+    <div class="container">
+        <div>
+            <div class="card">
+                <h2>👤 Novo Cliente</h2>
+                <br>
+                <div class="form-group">
+                    <label>Nome</label>
+                    <input type="text" id="nomeCli">
+                </div>
+                <div class="form-group">
+                    <label>CPF</label>
+                    <input type="text" id="cpfCli">
+                </div>
+                <button onclick="cadastrarCliente()">Cadastrar</button>
+            </div>
+
+            <div class="card">
+                <h2>📝 Abrir Comanda</h2>
+                <br>
+                <div class="form-group">
+                    <label>Selecione o Cliente</label>
+                    <select id="listaClientes">
+                        <option>Carregando...</option>
+                    </select>
+                </div>
+                <button class="success" onclick="abrirComanda()">Iniciar Pesca</button>
+            </div>
+        </div>
+
+        <div>
+            <div id="painelAtivo" class="card painel-comanda">
+                <h3>COMANDA <span id="lblComandaID">#0</span></h3>
+                <span class="valor-gigante" id="lblTotal">R$ 0,00</span>
+                <p>Status: <strong style="color:green">ABERTA</strong></p>
+            </div>
+
+            <div class="card">
+                <h2>🍺 Lançar Consumo</h2>
+                <p style="font-size: 0.9em; color: #666;">Digite o ID da comanda ou abra uma nova ao lado.</p>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <input type="number" id="idComandaInput" placeholder="ID Comanda" style="width: 100px;">
+                    <button onclick="buscarComanda()" style="width: auto; background: #6c757d;">🔍 Buscar</button>
+                </div>
+
+                <div class="form-group">
+                    <input type="text" id="produtoNome" placeholder="Produto (Ex: Isca, Cerveja, Porção)">
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex:1">
+                        <input type="number" id="qtdProd" placeholder="Qtd" value="1">
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <input type="number" id="precoProd" placeholder="Preço R$">
+                    </div>
+                </div>
+                <button onclick="lancarItem()" style="background-color: #e67e22;">Adicionar Item +</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+
+        // Inicialização
+        listarClientes();
+
+        async function listarClientes() {
+            const res = await fetch(API + "/clientes");
+            const dados = await res.json();
+            const select = document.getElementById("listaClientes");
+            select.innerHTML = "";
+            dados.forEach(c => {
+                select.innerHTML += `<option value="${c.id}">${c.nome} (CPF: ${c.cpf})</option>`;
+            });
+        }
+
+        async function cadastrarCliente() {
+            const nome = document.getElementById("nomeCli").value;
+            const cpf = document.getElementById("cpfCli").value;
+            
+            if(!nome || !cpf) return alert("Preencha tudo!");
+
+            const res = await fetch(API + "/clientes", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ nome, cpf, email: "", telefone: "" })
+            });
+
+            if(res.ok) {
+                alert("Cliente Salvo!");
+                document.getElementById("nomeCli").value = "";
+                document.getElementById("cpfCli").value = "";
+                listarClientes();
+            } else {
+                alert("Erro! CPF duplicado?");
+            }
+        }
+
+        async function abrirComanda() {
+            const clienteId = document.getElementById("listaClientes").value;
+            const res = await fetch(API + "/comandas", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ cliente_id: clienteId })
+            });
+
+            if(res.ok) {
+                const data = await res.json();
+                alert("Comanda Aberta: #" + data.id);
+                carregarPainel(data);
+            }
+        }
+
+        async function buscarComanda() {
+            const id = document.getElementById("idComandaInput").value;
+            if(!id) return alert("Digite o ID");
+
+            const res = await fetch(API + "/comandas/" + id);
+            if(res.ok) {
+                const data = await res.json();
+                carregarPainel(data);
+            } else {
+                alert("Comanda não encontrada!");
+            }
+        }
+
+        function carregarPainel(data) {
+            document.getElementById("painelAtivo").style.display = "block";
+            document.getElementById("lblComandaID").innerText = "#" + data.id;
+            document.getElementById("idComandaInput").value = data.id; 
+            
+            // Formata Dinheiro
+            const valor = data.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById("lblTotal").innerText = valor;
+        }
+
+        async function lancarItem() {
+            const comanda_id = document.getElementById("idComandaInput").value;
+            const nome_produto = document.getElementById("produtoNome").value;
+            const quantidade = document.getElementById("qtdProd").value;
+            const preco_unitario = document.getElementById("precoProd").value;
+
+            if(!comanda_id) return alert("Selecione ou Busque uma comanda antes!");
+
+            const res = await fetch(API + "/itens", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ comanda_id, nome_produto, quantidade, preco_unitario })
+            });
+
+            if(res.ok) {
+                // Recarrega o painel para mostrar o valor novo somado
+                buscarComanda(); 
+                alert("Item adicionado com sucesso!");
+            } else {
+                alert("Erro ao lançar item!");
+            }
+        }
+    </script>
+</body>
+</html>

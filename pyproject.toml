@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "projeto-pesqueiro"
+version = "0.1.0"
+package-mode = false
+description = "Sistema de gestão integrada para pesqueiro (C14)"
+authors = ["Seu Nome <email@exemplo.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.109.0"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+sqlalchemy = "^2.0.25"
+pydantic = {extras = ["email"], version = "^2.6.0"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+httpx = "^0.26.0"
+ruff = "^0.2.1"
+taskipy = "^1.12.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+pythonpath = "."
+addopts = "-p no:warnings"
+
+[tool.taskipy.tasks]
+run = "uvicorn App.api.main:app --reload"
+test = "pytest -v"
+lint = "ruff check ."
