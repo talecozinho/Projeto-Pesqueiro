@@ -72,7 +72,7 @@
             <div id="painelAtivo" class="card painel-comanda">
                 <h3>COMANDA <span id="lblComandaID">#0</span></h3>
                 <span class="valor-gigante" id="lblTotal">R$ 0,00</span>
-                <p>Status: <strong style="color:green">ABERTA</strong></p>
+                <p>Status: <strong id="lblStatus" style="color:green">ABERTA</strong></p>
             </div>
 
             <div class="card">
@@ -97,6 +97,10 @@
                 </div>
                 <button onclick="lancarItem()" style="background-color: #e67e22;">Adicionar Item +</button>
             </div>
+            
+            <button onclick="fecharComanda()" id="btnCheckout" style="background-color: #e74c3c; margin-top: 15px; display: none;">
+                FINALIZAR E PAGAR
+            </button>
         </div>
     </div>
     
@@ -164,7 +168,6 @@
             }
         }
 
-        // --- NOVO: Monta a lista de pedidos na tabela ---
         function montarListaPedidos(itens) {
             const lista = document.getElementById('listaPedidosDetalhe');
             lista.innerHTML = "";
@@ -175,20 +178,18 @@
             }
 
             itens.forEach(item => {
-                // toFixed(2) garante que o valor tenha duas casas decimais (R$ 10.00)
-                const totalItem = (item.quantidade * item.preco_unitario).toFixed(2);
+                const totalItem = (item.quantidade * item.preco_unitario);
                 lista.innerHTML += `
                     <tr>
                         <td>${item.nome_produto}</td>
                         <td>${item.quantidade}</td>
                         <td>R$ ${item.preco_unitario.toFixed(2)}</td>
-                        <td>R$ ${totalItem}</td>
+                        <td>R$ ${totalItem.toFixed(2)}</td>
                     </tr>
                 `;
             });
         }
         
-        // --- FUNÇÃO ATUALIZADA: Busca a comanda e chama a renderização ---
         async function buscarComanda() {
             const id = document.getElementById("idComandaInput").value;
             if(!id) return alert("Digite o ID");
@@ -202,17 +203,25 @@
             }
         }
 
-        // --- FUNÇÃO ATUALIZADA: Carrega o painel (Visor e Lista) ---
         function carregarPainel(data) {
             document.getElementById("painelAtivo").style.display = "block";
             document.getElementById("lblComandaID").innerText = "#" + data.id;
             document.getElementById("idComandaInput").value = data.id; 
             
-            // 1. Atualiza o Valor Grande
             const valor = data.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
             document.getElementById("lblTotal").innerText = valor;
             
-            // 2. Monta a lista de itens
+            document.getElementById("lblStatus").innerText = data.status;
+            
+            // Controle de Botão de Pagamento
+            if(data.status === "ABERTA") {
+                document.getElementById("btnCheckout").style.display = 'block';
+                document.getElementById("lblStatus").style.color = 'green';
+            } else {
+                 document.getElementById("btnCheckout").style.display = 'none';
+                 document.getElementById("lblStatus").style.color = 'red';
+            }
+
             montarListaPedidos(data.itens); 
         }
 
@@ -227,16 +236,35 @@
             const res = await fetch(API + "/itens", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                // Converte para Inteiro e Float para a API
                 body: JSON.stringify({ comanda_id: parseInt(comanda_id), nome_produto, quantidade, preco_unitario })
             });
 
             if(res.ok) {
                 alert("Item adicionado com sucesso!");
-                // Busca a comanda novamente para atualizar o painel
                 buscarComanda(); 
             } else {
                 alert("Erro ao lançar item!");
+            }
+        }
+
+        // --- FUNÇÃO DE CHECKOUT ---
+        async function fecharComanda() {
+            const id = document.getElementById("idComandaInput").value;
+            if (!id) return alert("Por favor, busque a comanda antes de fechar.");
+
+            if (!confirm(`Confirma o pagamento e o fechamento da Comanda #${id}? O valor é de ${document.getElementById("lblTotal").innerText}.`)) {
+                return; 
+            }
+
+            const res = await fetch(`${API}/comandas/${id}/checkout`, {
+                method: 'PUT' 
+            });
+
+            if (res.ok) {
+                alert(`Comanda #${id} FINALIZADA e PAGA!`);
+                buscarComanda(); 
+            } else {
+                alert("Erro ao fechar a comanda. Ela já pode estar PAGA.");
             }
         }
     </script>

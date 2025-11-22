@@ -4,23 +4,22 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from App.db.connection import engine, Base, get_db
-# Imports dos Modelos (Banco)
+# Models
 from App.models.cliente import Cliente
 from App.models.comanda import Comanda
-from App.models.item import ItemComanda # <--- NOVO IMPORT
-
-# Imports dos Schemas (Validação)
+from App.models.item import ItemComanda
+# Schemas
 from App.schemas.cliente import ClienteCreate, ClienteResponse
 from App.schemas.comanda import ComandaCreate, ComandaResponse
-from App.schemas.item import ItemCreate, ItemResponse # <--- NOVO IMPORT
+from App.schemas.item import ItemCreate, ItemResponse
 
 # Cria todas as tabelas
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Pesqueiro Manager API",
-    description="Sistema de Gestão Integrada para Pesqueiros",
-    version="0.1.0"
+    description="Sistema de Gestão de Clientes e Consumo",
+    version="1.0.0"
 )
 
 # Configuração CORS (Para o site funcionar)
@@ -34,7 +33,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"status": "Sistema Operacional"}
+    return {"status": "Online", "modulo": "Gestão de Comandas"}
 
 # --- CLIENTES ---
 @app.post("/clientes", response_model=ClienteResponse)
@@ -46,7 +45,7 @@ def criar_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
         db.refresh(db_cliente)
         return db_cliente
     except Exception:
-        raise HTTPException(status_code=400, detail="Erro ao cadastrar. CPF duplicado?")
+        raise HTTPException(status_code=400, detail="Erro. CPF já cadastrado?")
 
 @app.get("/clientes", response_model=List[ClienteResponse])
 def listar_clientes(db: Session = Depends(get_db)):
@@ -58,50 +57,57 @@ def abrir_comanda(comanda: ComandaCreate, db: Session = Depends(get_db)):
     cliente = db.query(Cliente).filter(Cliente.id == comanda.cliente_id).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
-
+    
     db_comanda = Comanda(cliente_id=comanda.cliente_id)
     db.add(db_comanda)
     db.commit()
     db.refresh(db_comanda)
     return db_comanda
 
-# --- NOVO: ADICIONAR ITENS (O Pulo do Gato) ---
+@app.get("/comandas/{comanda_id}", response_model=ComandaResponse)
+def ver_comanda(comanda_id: int, db: Session = Depends(get_db)):
+    # Adicionamos o .options(joinedload(Comanda.itens)) para carregar a lista de itens
+    # O Pydantic (Schema) faz o resto do trabalho de formatação
+    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada")
+    return comanda
+
+# --- ITENS (CONSUMO) ---
 @app.post("/itens", response_model=ItemResponse)
 def adicionar_item(item: ItemCreate, db: Session = Depends(get_db)):
-    """
-    Adiciona um produto na comanda e atualiza o valor total automaticamente.
-    """
-    # 1. Acha a comanda no banco
     comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
     
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
-    
     if comanda.status != "ABERTA":
-        raise HTTPException(status_code=400, detail="Esta comanda já está fechada!")
+        raise HTTPException(status_code=400, detail="Comanda já está fechada!")
 
-    # 2. Cria o item
     db_item = ItemComanda(**item.model_dump())
     db.add(db_item)
+    comanda.valor_total += (item.quantidade * item.preco_unitario)
     
-    # 3. Lógica de Negócio: Calcula o subtotal e soma na Comanda
-    subtotal = item.quantidade * item.preco_unitario
-    comanda.valor_total += subtotal  # <--- AQUI ACONTECE A SOMA AUTOMÁTICA
-
-    # 4. Salva tudo de uma vez
     db.commit()
     db.refresh(db_item)
     return db_item
 
-# --- NOVO: CONSULTAR UMA COMANDA ESPECÍFICA ---
-@app.get("/comandas/{comanda_id}", response_model=ComandaResponse)
-def ver_comanda(comanda_id: int, db: Session = Depends(get_db)):
+# --- NOVO: CHECKOUT / FECHAMENTO DE CONTA ---
+@app.put("/comandas/{comanda_id}/checkout", response_model=ComandaResponse)
+def finalizar_comanda(comanda_id: int, db: Session = Depends(get_db)):
     """
-    Mostra o status atual da comanda e o valor total a pagar.
+    Finaliza a comanda, mudando seu status para 'PAGA'. 
+    A conta fica travada contra novos pedidos.
     """
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
-        
+    
+    if comanda.status != "ABERTA":
+        raise HTTPException(status_code=400, detail=f"Comanda já está {comanda.status}.")
+
+    comanda.status = "PAGA"
+    db.commit()
+    db.refresh(comanda)
+    
     return comanda
