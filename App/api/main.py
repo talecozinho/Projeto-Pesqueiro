@@ -4,16 +4,16 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from App.db.connection import engine, Base, get_db
-# Models
+# Imports dos Modelos
 from App.models.cliente import Cliente
 from App.models.comanda import Comanda
 from App.models.item import ItemComanda
-# Schemas
+# Imports dos Schemas
 from App.schemas.cliente import ClienteCreate, ClienteResponse
 from App.schemas.comanda import ComandaCreate, ComandaResponse
 from App.schemas.item import ItemCreate, ItemResponse
 
-# Cria todas as tabelas
+# Cria todas as tabelas no banco de dados (SQLite)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -22,7 +22,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configuração CORS (Para o site funcionar)
+# Configuração CORS 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,8 +66,6 @@ def abrir_comanda(comanda: ComandaCreate, db: Session = Depends(get_db)):
 
 @app.get("/comandas/{comanda_id}", response_model=ComandaResponse)
 def ver_comanda(comanda_id: int, db: Session = Depends(get_db)):
-    # Adicionamos o .options(joinedload(Comanda.itens)) para carregar a lista de itens
-    # O Pydantic (Schema) faz o resto do trabalho de formatação
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
@@ -91,13 +89,9 @@ def adicionar_item(item: ItemCreate, db: Session = Depends(get_db)):
     db.refresh(db_item)
     return db_item
 
-# --- NOVO: CHECKOUT / FECHAMENTO DE CONTA ---
+# --- CHECKOUT (FECHAMENTO) ---
 @app.put("/comandas/{comanda_id}/checkout", response_model=ComandaResponse)
 def finalizar_comanda(comanda_id: int, db: Session = Depends(get_db)):
-    """
-    Finaliza a comanda, mudando seu status para 'PAGA'. 
-    A conta fica travada contra novos pedidos.
-    """
     comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
     
     if not comanda:
@@ -111,3 +105,28 @@ def finalizar_comanda(comanda_id: int, db: Session = Depends(get_db)):
     db.refresh(comanda)
     
     return comanda
+
+# --- ADMIN: DELETAR COMANDA ---
+@app.delete("/comandas/{comanda_id}")
+def deletar_comanda(comanda_id: int, db: Session = Depends(get_db)):
+    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    
+    if not comanda:
+        raise HTTPException(status_code=404, detail="Comanda não encontrada.")
+    
+    if comanda.status != "PAGA":
+        if comanda.valor_total > 0:
+            raise HTTPException(status_code=400, detail=f"Comanda {comanda.status} com valor pendente (R$ {comanda.valor_total:.2f}). Pague antes de deletar.")
+
+    db.delete(comanda)
+    db.commit()
+    
+    return {"message": f"Comanda {comanda_id} deletada com sucesso."}
+
+# --- ADMIN: LIMPEZA DO BANCO DE DADOS ---
+@app.post("/admin/reset-db")
+def reset_database():
+    from App.db.connection import engine, Base
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    return {"message": "Database reset successful. All tables cleared."}

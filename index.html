@@ -64,7 +64,7 @@
                         <option>Carregando...</option>
                     </select>
                 </div>
-                <button class="success" onclick="abrirComanda()">Iniciar Pesca</button>
+                <button class="success" onclick="abrirComanda()">Abrir Comanda</button>
             </div>
         </div>
 
@@ -101,6 +101,11 @@
             <button onclick="fecharComanda()" id="btnCheckout" style="background-color: #e74c3c; margin-top: 15px; display: none;">
                 FINALIZAR E PAGAR
             </button>
+            
+            <button onclick="deletarComanda()" id="btnDelete" style="background-color: #8c0000; margin-top: 5px; display: none;">
+                EXCLUIR REGISTRO (Conta Paga)
+            </button>
+
         </div>
     </div>
     
@@ -161,10 +166,13 @@
                 body: JSON.stringify({ cliente_id: clienteId })
             });
 
-            if(res.ok) {
+            if (res.ok) {
                 const data = await res.json();
                 alert("Comanda Aberta: #" + data.id);
                 carregarPainel(data);
+            } else {
+                const errorData = await res.json();
+                alert(`Erro ao abrir comanda: ${errorData.detail}`);
             }
         }
 
@@ -213,13 +221,21 @@
             
             document.getElementById("lblStatus").innerText = data.status;
             
-            // Controle de Botão de Pagamento
+            const btnCheckout = document.getElementById("btnCheckout");
+            const btnDelete = document.getElementById("btnDelete");
+            
+            // Controle de Botão de Pagamento/Status
             if(data.status === "ABERTA") {
-                document.getElementById("btnCheckout").style.display = 'block';
+                btnCheckout.style.display = 'block'; 
+                btnDelete.style.display = 'none';    
                 document.getElementById("lblStatus").style.color = 'green';
-            } else {
-                 document.getElementById("btnCheckout").style.display = 'none';
+            } else if (data.status === "PAGA") {
+                 btnCheckout.style.display = 'none';
+                 btnDelete.style.display = 'block';   // Mostra DELETAR quando PAGA
                  document.getElementById("lblStatus").style.color = 'red';
+            } else {
+                btnCheckout.style.display = 'none';
+                btnDelete.style.display = 'none';
             }
 
             montarListaPedidos(data.itens); 
@@ -243,11 +259,11 @@
                 alert("Item adicionado com sucesso!");
                 buscarComanda(); 
             } else {
-                alert("Erro ao lançar item!");
+                const errorData = await res.json();
+                alert(`Erro ao lançar item: ${errorData.detail}`);
             }
         }
 
-        // --- FUNÇÃO DE CHECKOUT ---
         async function fecharComanda() {
             const id = document.getElementById("idComandaInput").value;
             if (!id) return alert("Por favor, busque a comanda antes de fechar.");
@@ -264,7 +280,33 @@
                 alert(`Comanda #${id} FINALIZADA e PAGA!`);
                 buscarComanda(); 
             } else {
-                alert("Erro ao fechar a comanda. Ela já pode estar PAGA.");
+                const errorData = await res.json();
+                alert(`Erro ao fechar a comanda: ${errorData.detail}`);
+            }
+        }
+        
+        async function deletarComanda() {
+            const id = document.getElementById("idComandaInput").value;
+            if (!id) return alert("Por favor, digite o ID da comanda para deletar.");
+
+            if (!confirm(`ATENÇÃO: Confirma a EXCLUSÃO PERMANENTE da Comanda #${id} e de todos os seus itens?`)) {
+                return;
+            }
+
+            const res = await fetch(`${API}/comandas/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (res.ok) {
+                alert(`Comanda #${id} e todos os seus itens foram deletados com sucesso.`);
+                // Limpa o painel após a exclusão
+                document.getElementById("painelAtivo").style.display = 'none';
+                document.getElementById("lblTotal").innerText = 'R$ 0,00';
+                document.getElementById('listaPedidosDetalhe').innerHTML = "<tr><td colspan='4'>Nenhum registro ativo.</td></tr>";
+                document.getElementById("idComandaInput").value = '';
+            } else {
+                const errorData = await res.json();
+                alert(`Erro ao deletar: ${errorData.detail}`);
             }
         }
     </script>
