@@ -51,6 +51,15 @@ def criar_cliente(cliente: ClienteCreate, db: Session = Depends(get_db)):
 def listar_clientes(db: Session = Depends(get_db)):
     return db.query(Cliente).all()
 
+@app.get("/clientes/{cliente_id}", response_model=ClienteResponse)
+def buscar_cliente_por_id(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = db.query(Cliente).filter(Cliente.id == cliente_id).first()
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    return cliente
+    
 # --- COMANDAS ---
 @app.post("/comandas", response_model=ComandaResponse)
 def abrir_comanda(comanda: ComandaCreate, db: Session = Depends(get_db)):
