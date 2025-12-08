@@ -512,27 +512,28 @@ def test_item_preco_negativo():
     assert resp.status_code == 200
     # assert "preço" in resp.json()["detail"].lower()
 
-'''
-def test_buscar_cliente_sucesso():
-    # Teste verdadeiro: buscar cliente por id
-    response_cliente = client.post(
-        "/clientes",
-        json={
-            "nome": "Gabriela",
-            "cpf": "99900011122",
-            "telefone": "",
-            "email": ""
-        }
-    )
-    assert response_cliente.status_code == 200
-    cid = response_cliente.json()["id"]
+def test_buscar_cliente_por_id(client):
+    # Criar novo cliente
+    novo_cliente = {
+        "nome": "João Teste",
+        "cpf": "12345678901",
+        "telefone": "11999999999"
+    }
 
-    resp = client.get(f"/clientes/{cid}")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["nome"] == "Gabriela"
-    assert data["cpf"] == "99900011122"
-'''
+    response = client.post("/clientes", json=novo_cliente)
+    assert response.status_code == 200
+    cliente_data = response.json()
+    cliente_id = cliente_data["id"]
+
+    # Buscar cliente
+    response = client.get(f"/clientes/{cliente_id}")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["id"] == cliente_id
+    assert data["nome"] == "João Teste"
+    assert data["cpf"] == "12345678901"
+    assert data["telefone"] == "11999999999"
 
 def test_buscar_cliente_inexistente():
     # Teste falso: buscar cliente que não existe
